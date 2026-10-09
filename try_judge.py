@@ -78,13 +78,18 @@ def show(res, dt, truth=None):
 
 def main():
     ap = argparse.ArgumentParser(description="试用判案 API")
-    ap.add_argument("--url", default="http://127.0.0.1:8000", help="API 地址")
+    ap.add_argument("bare_url", nargs="?", help="API 地址（等价于 --url，可直接写网址）")
+    ap.add_argument("--url", help="API 地址")
     ap.add_argument("--key", help="不填则从 judge.env 读 JUDGE_KEY")
     ap.add_argument("--id", help="用语料里某份判决书的案情，如 J0003")
     ap.add_argument("--file", help="用自己写的案情文本文件（UTF-8）")
     ap.add_argument("--n", type=int, default=1, help="连测 n 件（随机抽语料）")
     args = ap.parse_args()
 
+    # 允许直接写网址（python try_judge.py https://xxx），省得记 --url
+    base = args.url or args.bare_url or "http://127.0.0.1:8000"
+    if not base.startswith("http"):
+        base = "https://" + base
     cfg = load_cfg()
     key = args.key or cfg.get("JUDGE_KEY")
     if not key:
@@ -96,7 +101,7 @@ def main():
     if os.path.exists(kb_path):
         rows = [json.loads(l) for l in io.open(kb_path, encoding="utf-8") if l.strip()]
 
-    print(f"API: {args.url}\n")
+    print(f"API: {base}\n")
 
     if args.file:
         cases = [io.open(args.file, encoding="utf-8").read()]
@@ -121,7 +126,7 @@ def main():
         print("=" * 74)
         print(f"[{i}/{len(cases)}] {label}   案情 {len(ct)} 字")
         try:
-            res, dt, st = call(args.url, key, ct)
+            res, dt, st = call(base, key, ct)
         except urllib.error.HTTPError as e:
             print(f"  HTTP {e.code}: {e.read().decode('utf-8', 'replace')[:200]}")
             return 1
