@@ -297,17 +297,47 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True})
         return self._json({"error": "not found"}, 404)
 
+    def _read_body(self):
+        """读完整请求体。
+
+        ⚠ 必须在任何提前返回（404 / 401）**之前**调用。
+        HTTP/1.1 keep-alive 下，没读完的 body 会留在 socket 缓冲区里，
+        被当成下一个请求的请求行——实测症状是：
+          /health → 无 key 调 /judge(401) → 带 key 调 /judge
+          第三次报 `Unsupported method ('{"case_text":"..."}POST')` 501。
+        本地单测发现不了（每次都新建连接），经 Cloudflare 隧道时连接复用才会暴露。
+        """
+        te = (self.headers.get("Transfer-Encoding") or "").lower()
+        if "chunked" in te:
+            chunks = []
+            while True:
+                line = self.rfile.readline().strip()
+                if not line:
+                    break
+                try:
+                    size = int(line.split(b";")[0], 16)
+                except ValueError:
+                    break
+                if size == 0:
+                    self.rfile.readline()
+                    break
+                chunks.append(self.rfile.read(size))
+                self.rfile.readline()
+            return b"".join(chunks)
+        n = int(self.headers.get("Content-Length") or 0)
+        return self.rfile.read(n) if n > 0 else b""
+
     def do_POST(self):
         path = self.path.split("?")[0]
+        raw = self._read_body()          # ← 先读完，再判断，否则 keep-alive 会串包
         if path != "/judge":
             return self._json({"error": "not found"}, 404)
         ok, code = self._auth_ok()
         if not ok:
             return self._json({"error": "unauthorized"}, code)
 
-        n = int(self.headers.get("Content-Length") or 0)
         try:
-            body = json.loads(self.rfile.read(n).decode("utf-8")) if n else {}
+            body = json.loads(raw.decode("utf-8")) if raw else {}
         except Exception as e:
             return self._json({"error": f"请求体不是合法 JSON: {e}"}, 400)
         case_text = (body.get("case_text") or "").strip()
