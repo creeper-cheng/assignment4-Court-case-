@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 密钥（作业明确要求「只写在提交框里，不要放进代码仓库」）
+judge.env
+*.env
+key.txt
+
+# 建库产物（28 MB 的先例库 + 索引，可用 build_kb.py 重新生成）
+_derived/
