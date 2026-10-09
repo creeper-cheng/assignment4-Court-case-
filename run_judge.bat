@@ -17,8 +17,16 @@ if not exist "judge.env" (
   pause
   exit /b 1
 )
-for /f "usebackq tokens=1,* delims==" %%a in ("judge.env") do (
-  if not "%%a"=="" if not "%%a:~0,1%"=="#" set "%%a=%%b"
+rem  eol=# skips comment lines.
+rem  Do NOT write `if not "%%a:~0,1%"=="#"`: substring syntax works only on
+rem  normal variables (%var:~0,1%), not on FOR variables, and the trailing %
+rem  makes cmd treat it as a variable reference. Result: "The syntax of the
+rem  command is incorrect." and the batch exits before any output
+rem  (symptom: double-click and the window flashes and closes).
+rem  NOTE: keep every line in this file pure ASCII - cmd mis-parses
+rem  multi-byte characters once chcp 65001 has run.
+for /f "usebackq eol=# tokens=1,* delims==" %%a in ("judge.env") do (
+  if not "%%a"=="" set "%%a=%%b"
 )
 
 if not exist "_derived\kb.jsonl" (
